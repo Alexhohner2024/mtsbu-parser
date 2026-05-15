@@ -191,8 +191,11 @@ def check_policy(plate: str, date: str, headless: bool = False) -> dict:
             date_input = page.locator("#numDate").first
             date_input.fill(date)
 
-            print("  ⏳ Очікування вирішення Turnstile (до 60 сек)...")
-            print("  💡 Якщо капча не проходить автоматично - клікніть на неї вручну")
+            print("  ⏳ Очікування вирішення Turnstile...")
+            print("  💡 Якщо капча не проходить автоматично:")
+            print("     1. Клікніть на чекбокс Turnstile на сторінці")
+            print("     2. Виконайте завдання (якщо потрібно)")
+            print("     3. Скрипт автоматично відправить форму після успіху")
 
             submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
             try:
@@ -201,13 +204,14 @@ def check_policy(plate: str, date: str, headless: bool = False) -> dict:
 
                 page.wait_for_function("""
                     () => {
-                        const btn = document.querySelector('button[type="submit"], input[type="submit"]');
+                        const btn = document.querySelector('button[type=submit], input[type=submit]');
                         return btn && !btn.disabled;
                     }
-                """, timeout=60000)
+                """, timeout=120000)
             except Exception:
                 return {"found": False, "error": "Turnstile не пройдено. Спробуйте ще раз або відкрийте сайт у браузері вручну."}
 
+            print("  ✅ Turnstile пройдено! Відправка форми...")
             submit_btn.click()
             page.wait_for_timeout(5000)
             page.wait_for_load_state("domcontentloaded", timeout=30000)
