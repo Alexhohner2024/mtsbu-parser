@@ -18,7 +18,7 @@ import sys
 from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 
-from check_policy import check_policy
+from check_policy import MtsbuChecker
 
 
 def date_to_str(d: datetime) -> str:
@@ -43,10 +43,10 @@ def fmt_delta(days: int) -> str:
     return f"{days}дн"
 
 
-def check_policy_retry(plate: str, date_str: str, headless: bool, max_retries: int = 2) -> dict:
+def check_with_retry(checker: MtsbuChecker, plate: str, date_str: str, max_retries: int = 2) -> dict:
     for attempt in range(max_retries + 1):
         try:
-            return check_policy(plate, date_str, headless=headless)
+            return checker.check(plate, date_str)
         except Exception as e:
             if attempt < max_retries:
                 print(f"⚠️  помилка: {e}. Повтор {attempt+1}/{max_retries}...")
@@ -62,93 +62,98 @@ def find_policy_end(plate: str, headless: bool = False):
     print(f"📅 Сьогодні: {date_to_str(today)}")
     print()
 
-    result_today = check_policy_retry(plate, date_to_str(today), headless=headless)
-    if not result_today.get("found"):
-        print("\n❌ Поліс не знайдено на сьогодні")
-        return None, None, None
+    checker = MtsbuChecker(headless=headless)
+    try:
+        result_today = check_with_retry(checker, plate, date_to_str(today))
+        if not result_today.get("found"):
+            print("\n❌ Поліс не знайдено на сьогодні")
+            return None, None, None
 
-    policy_number = result_today["policyNumber"]
-    print(f"\n📋 Поточний поліс: №{policy_number}")
+        policy_number = result_today["policyNumber"]
+        print(f"📋 Поточний поліс: №{policy_number}")
 
-    print("\n🔎 Експоненційний пошук меж...")
-    step = 90
-    offset = step
-    prev_date = today
-    prev_result = result_today
+        print("\n🔎 Експоненційний пошук меж...")
+        step = 90
+        offset = step
+        prev_date = today
 
-    MAX_STEPS = 20
-    for i in range(MAX_STEPS):
-        check_date = today - timedelta(days=offset)
+        for i in range(20):
+            check_date = today - timedelta(days=offset)
+            if check_date.year < 2010:
+                print("  ⛔ Дійшли до 2010 року — поліс діє дуже довго")
+                break
 
-        if check_date.year < 2010:
-            print("  ⛔ Дійшли до 2010 року — поліс діє дуже довго")
-            break
+            date_str = date_to_str(check_date)
+            print(f"  [{i+1}] Перевірка {date_str} (offset: -{offset}дн)...", end=" ", flush=True)
 
-        date_str = date_to_str(check_date)
-        print(f"  [{i+1}] Перевірка {date_str} (offset: -{offset}дн)...", end=" ", flush=True)
+            result = check_with_retry(checker, plate, date_str)
+            found_policy = result.get("policyNumber")
 
-        result = check_policy_retry(plate, date_str, headless=headless)
-        found_policy = result.get("policyNumber")
-
-        if found_policy == policy_number:
-            print(f"✅ той же поліс №{found_policy}")
-            prev_date = check_date
-            prev_result = result
-            offset += step
-            step *= 2
-        else:
-            if result.get("found"):
-                print(f"⚠️  інший поліс №{found_policy}")
+            if found_policy == policy_number:
+                print(f"✅ той же поліс №{found_policy}")
+                prev_date = check_date
+                offset += step
+                step *= 2
             else:
-                print("❌ поліс не знайдено")
-            break
-    else:
-        print("  ⛔ Достигнут лимит шагов")
-
-    print("\n🎯 Бінарний пошук точної дати початку...")
-    low = check_date
-    high = prev_date
-
-    low_delta = (today - low).days
-    high_delta = (today - high).days
-    print(f"  Межі: {date_to_str(low)} — {date_to_str(high)} ({low_delta}–{high_delta}дн тому)")
-
-    iterations = 0
-    while (high - low).days > 1:
-        mid = low + (high - low) // 2
-        date_str = date_to_str(mid)
-        print(f"  [{iterations+1}] {date_str}...", end=" ", flush=True)
-
-        result = check_policy_retry(plate, date_str, headless=headless)
-        found_policy = result.get("policyNumber")
-
-        if found_policy == policy_number:
-            high = mid
-            print(f"✅ той же поліс (→ зсуваємо HIGH)")
+                if result.get("found"):
+                    print(f"⚠️  інший поліс №{found_policy}")
+                else:
+                    print("❌ поліс не знайдено")
+                break
         else:
-            low = mid
-            if result.get("found"):
-                print(f"⚠️  інший поліс №{found_policy} (→ зсуваємо LOW)")
+            print("  ⛔ Достигнут лимит шагов")
+
+        print("\n🎯 Бінарний пошук точної дати початку...")
+        low = check_date
+        high = prev_date
+
+        low_delta = (today - low).days
+        high_delta = (today - high).days
+        print(f"  Межі: {date_to_str(low)} — {date_to_str(high)} ({low_delta}–{high_delta}дн тому)")
+
+        iterations = 0
+        low_ord = low.toordinal()
+        high_ord = high.toordinal()
+
+        while high_ord - low_ord > 1:
+            mid_ord = (low_ord + high_ord) // 2
+            mid = datetime.fromordinal(mid_ord)
+            date_str = date_to_str(mid)
+            print(f"  [{iterations+1}] {date_str}...", end=" ", flush=True)
+
+            result = check_with_retry(checker, plate, date_str)
+            found_policy = result.get("policyNumber")
+
+            if found_policy == policy_number:
+                high_ord = mid_ord
+                print(f"✅ той же поліс (→ зсуваємо HIGH)")
             else:
-                print(f"❌ не знайдено (→ зсуваємо LOW)")
+                low_ord = mid_ord
+                if result.get("found"):
+                    print(f"⚠️  інший поліс №{found_policy} (→ зсуваємо LOW)")
+                else:
+                    print(f"❌ не знайдено (→ зсуваємо LOW)")
 
-        iterations += 1
+            iterations += 1
 
-    start_date = high
-    end_date = start_date + relativedelta(years=1) - timedelta(days=1)
-    duration = (end_date - today).days
-    duration_str = fmt_delta(duration)
+        start_date = datetime.fromordinal(high_ord)
+        end_date = start_date + relativedelta(years=1) - timedelta(days=1)
+        duration = (end_date - today).days
+        duration_str = fmt_delta(duration)
 
-    print(f"\n{'=' * 50}")
-    print(f"  📋 Результат для {plate}")
-    print(f"  Поліс №{policy_number}")
-    print(f"  Початок:   {date_to_str(start_date)}")
-    print(f"  Закінчення: {date_to_str(end_date)}")
-    print(f"  Залишилось: {duration_str} ({duration} днів)")
-    print(f"  Перевірок:  {i + 1 + iterations + 1}")
-    print(f"{'=' * 50}")
+        print(f"\n{'=' * 50}")
+        print(f"  📋 Результат для {plate}")
+        print(f"  Поліс №{policy_number}")
+        print(f"  Початок:   {date_to_str(start_date)}")
+        print(f"  Закінчення: {date_to_str(end_date)}")
+        print(f"  Залишилось: {duration_str} ({duration} днів)")
+        print(f"  Перевірок:  {i + 1 + iterations + 1}")
+        print(f"{'=' * 50}")
 
-    return policy_number, start_date, end_date
+        return policy_number, start_date, end_date
+
+    finally:
+        checker.close()
 
 
 def main():

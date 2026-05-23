@@ -126,6 +126,54 @@ def parse_result_page(html: str) -> dict:
     return result
 
 
+class MtsbuChecker:
+    def __init__(self, headless: bool = False):
+        self.browser = launch(
+            headless=headless,
+            humanize=True,
+            args=["--fingerprint=12345"],
+        )
+
+    def check(self, plate: str, date: str) -> dict:
+        page = self.browser.new_page()
+        try:
+            page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(3000)
+
+            plate_tab = page.locator('a[href="#carNumber"], a#carNumber-tab').first
+            if plate_tab.is_visible():
+                plate_tab.click()
+                page.wait_for_timeout(500)
+
+            plate_input = page.locator("#RegNoModel_PlateNumber").first
+            plate_input.fill(plate)
+
+            date_input = page.locator("#numDate").first
+            date_input.fill(date)
+
+            submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
+            submit_btn.wait_for(state="visible", timeout=30000)
+            page.wait_for_function("""
+                () => {
+                    const btn = document.querySelector('button[type=submit], input[type=submit]');
+                    return btn && !btn.disabled;
+                }
+            """, timeout=60000)
+
+            submit_btn.click()
+            page.wait_for_timeout(5000)
+            page.wait_for_load_state("domcontentloaded", timeout=30000)
+
+            html = page.content()
+            return parse_result_page(html)
+
+        finally:
+            page.close()
+
+    def close(self):
+        self.browser.close()
+
+
 def print_result(result: dict, plate: str, date: str):
     print("\n" + "=" * 50)
     print("  Перевірка полісу ОСЦПВВТЗ")
@@ -171,49 +219,11 @@ def print_result(result: dict, plate: str, date: str):
 
 
 def check_policy(plate: str, date: str, headless: bool = False) -> dict:
-    browser = launch(
-        headless=headless,
-        humanize=True,
-        args=["--fingerprint=12345"],
-    )
-    page = browser.new_page()
-
+    checker = MtsbuChecker(headless=headless)
     try:
-        page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(3000)
-
-        plate_tab = page.locator('a[href="#carNumber"], a#carNumber-tab').first
-        if plate_tab.is_visible():
-            plate_tab.click()
-            page.wait_for_timeout(500)
-
-        plate_input = page.locator("#RegNoModel_PlateNumber").first
-        plate_input.fill(plate)
-
-        date_input = page.locator("#numDate").first
-        date_input.fill(date)
-
-        print("  ⏳ Очікування проходження Turnstile...")
-
-        submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
-        submit_btn.wait_for(state="visible", timeout=30000)
-        page.wait_for_function("""
-            () => {
-                const btn = document.querySelector('button[type=submit], input[type=submit]');
-                return btn && !btn.disabled;
-            }
-        """, timeout=60000)
-
-        print("  ✅ Turnstile пройдено! Відправка форми...")
-        submit_btn.click()
-        page.wait_for_timeout(5000)
-        page.wait_for_load_state("domcontentloaded", timeout=30000)
-
-        html = page.content()
-        return parse_result_page(html)
-
+        return checker.check(plate, date)
     finally:
-        browser.close()
+        checker.close()
 
 
 def main():
