@@ -67,7 +67,7 @@ def find_policy_end(plate: str, headless: bool = False):
         result_today = check_with_retry(checker, plate, date_to_str(today))
         if not result_today.get("found"):
             print("\n❌ Поліс не знайдено на сьогодні")
-            return None, None, None
+            return None, None, None, None
 
         policy_number = result_today["policyNumber"]
         print(f"📋 Поточний поліс: №{policy_number}")
@@ -141,16 +141,24 @@ def find_policy_end(plate: str, headless: bool = False):
         duration = (end_date - today).days
         duration_str = fmt_delta(duration)
 
+        company = result_today.get("company", {})
+        vehicle = result_today.get("vehicle", {})
+
         print(f"\n{'=' * 50}")
         print(f"  📋 Результат для {plate}")
-        print(f"  Поліс №{policy_number}")
-        print(f"  Початок:   {date_to_str(start_date)}")
-        print(f"  Закінчення: {date_to_str(end_date)}")
-        print(f"  Залишилось: {duration_str} ({duration} днів)")
-        print(f"  Перевірок:  {i + 1 + iterations + 1}")
+        print(f"  🆔 Поліс №{policy_number}")
+        print(f"  🏢 СК: {company.get('name', 'N/A')}")
+        print(f"  🚗 Авто: {vehicle.get('make', '')} {vehicle.get('model', '')}")
+        print(f"  📂 Тип: {vehicle.get('type', 'N/A')}")
+        print(f"  🔢 Госномер: {vehicle.get('plate', plate)}")
+        print(f"  🔍 VIN: {vehicle.get('vin', 'N/A')}")
+        print(f"  📅 Початок:   {date_to_str(start_date)}")
+        print(f"  ⏳ Закінчення: {date_to_str(end_date)}")
+        print(f"  ⏰ Залишилось: {duration_str} ({duration} дн)")
+        print(f"  📊 Перевірок: {i + 1 + iterations + 1}")
         print(f"{'=' * 50}")
 
-        return policy_number, start_date, end_date
+        return policy_number, start_date, end_date, result_today
 
     finally:
         checker.close()
@@ -162,7 +170,7 @@ def main():
     parser.add_argument("--headless", action="store_true", help="Запустити браузер без вікна")
     args = parser.parse_args()
 
-    policy_number, start_date, end_date = find_policy_end(args.plate, headless=args.headless)
+    policy_number, start_date, end_date, info = find_policy_end(args.plate, headless=args.headless)
 
     return 0 if policy_number else 1
 
