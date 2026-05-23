@@ -197,6 +197,12 @@ def check_policy(plate: str, date: str, headless: bool = False) -> dict:
 
         submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
         submit_btn.wait_for(state="visible", timeout=30000)
+        page.wait_for_function("""
+            () => {
+                const btn = document.querySelector('button[type=submit], input[type=submit]');
+                return btn && !btn.disabled;
+            }
+        """, timeout=60000)
 
         print("  ✅ Turnstile пройдено! Відправка форми...")
         submit_btn.click()
