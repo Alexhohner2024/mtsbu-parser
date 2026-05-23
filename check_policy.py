@@ -2,7 +2,7 @@
 """
 MTSBU Policy Checker
 Перевірка страхового полісу за державним номером через policy.mtsbu.ua
-Використовує Playwright для обходу Cloudflare Turnstile.
+Використовує CloakBrowser для обходу Cloudflare Turnstile.
 
 Usage:
     python check_policy.py AA1234BC
@@ -17,7 +17,7 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
-from playwright.sync_api import sync_playwright
+from cloakbrowser import launch
 from bs4 import BeautifulSoup
 
 
@@ -33,7 +33,11 @@ def parse_result_page(html: str) -> dict:
     if not content:
         return {"found": False, "error": "Не знайдено блок результатів"}
 
-    not_found = content.find(id="notFound") or content.find("div", class_="not-found")
+    not_found = (
+        content.find(id="notFound")
+        or content.find("div", class_="not-found")
+        or content.find("h3", string=lambda t: t and "поліс не знайдено" in t.lower())
+    )
     if not_found:
         return {"found": False, "message": normalize_text(not_found.get_text())}
 
@@ -167,67 +171,50 @@ def print_result(result: dict, plate: str, date: str):
 
 
 def check_policy(plate: str, date: str, headless: bool = False) -> dict:
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=headless)
-        context = browser.new_context(
-            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-            locale="uk-UA",
-            viewport={"width": 1280, "height": 800},
-        )
-        page = context.new_page()
+    browser = launch(
+        headless=headless,
+        humanize=True,
+        args=["--fingerprint=12345"],
+    )
+    page = browser.new_page()
 
-        try:
-            page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(3000)
+    try:
+        page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(3000)
 
-            plate_tab = page.locator('a[href="#carNumber"], a#carNumber-tab').first
-            if plate_tab.is_visible():
-                plate_tab.click()
-                page.wait_for_timeout(500)
+        plate_tab = page.locator('a[href="#carNumber"], a#carNumber-tab').first
+        if plate_tab.is_visible():
+            plate_tab.click()
+            page.wait_for_timeout(500)
 
-            plate_input = page.locator("#RegNoModel_PlateNumber").first
-            plate_input.fill(plate)
+        plate_input = page.locator("#RegNoModel_PlateNumber").first
+        plate_input.fill(plate)
 
-            date_input = page.locator("#numDate").first
-            date_input.fill(date)
+        date_input = page.locator("#numDate").first
+        date_input.fill(date)
 
-            print("  ⏳ Очікування вирішення Turnstile...")
-            print("  💡 Якщо капча не проходить автоматично:")
-            print("     1. Клікніть на чекбокс Turnstile на сторінці")
-            print("     2. Виконайте завдання (якщо потрібно)")
-            print("     3. Скрипт автоматично відправить форму після успіху")
+        print("  ⏳ Очікування проходження Turnstile...")
 
-            submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
-            try:
-                submit_btn.wait_for(state="attached", timeout=10000)
-                submit_btn.wait_for(state="visible", timeout=10000)
+        submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
+        submit_btn.wait_for(state="visible", timeout=30000)
 
-                page.wait_for_function("""
-                    () => {
-                        const btn = document.querySelector('button[type=submit], input[type=submit]');
-                        return btn && !btn.disabled;
-                    }
-                """, timeout=120000)
-            except Exception:
-                return {"found": False, "error": "Turnstile не пройдено. Спробуйте ще раз або відкрийте сайт у браузері вручну."}
+        print("  ✅ Turnstile пройдено! Відправка форми...")
+        submit_btn.click()
+        page.wait_for_timeout(5000)
+        page.wait_for_load_state("domcontentloaded", timeout=30000)
 
-            print("  ✅ Turnstile пройдено! Відправка форми...")
-            submit_btn.click()
-            page.wait_for_timeout(5000)
-            page.wait_for_load_state("domcontentloaded", timeout=30000)
+        html = page.content()
+        return parse_result_page(html)
 
-            html = page.content()
-            return parse_result_page(html)
-
-        finally:
-            browser.close()
+    finally:
+        browser.close()
 
 
 def main():
     parser = argparse.ArgumentParser(description="Перевірка полісу ОСЦПВВТЗ за державним номером")
     parser.add_argument("plate", help="Державний номер ТЗ (напр. AA1234BC)")
     parser.add_argument("--date", default=None, help="Дата у форматі дд.мм.рррр (за замовчуванням сьогодні)")
-    parser.add_argument("--headless", action="store_true", help="Запустити браузер без вікна (може не працювати з Turnstile)")
+    parser.add_argument("--headless", action="store_true", help="Запустити браузер без вікна")
     parser.add_argument("--json", dest="json_file", help="Зберегти результат у JSON файл")
 
     args = parser.parse_args()
