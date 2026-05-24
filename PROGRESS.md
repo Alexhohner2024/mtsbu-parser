@@ -164,4 +164,84 @@ python3 check_policy.py AA1234BC --headless
 cloakbrowser>=0.3.30
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
+python-dateutil>=2.8.0
+customtkinter>=5.2.0
+Pillow>=10.0.0
+pyperclip>=1.8.2
 ```
+
+---
+
+## Дата: 24.05.2026 — Windows GUI (v2.0)
+
+Рефакторинг и создание настольного приложения на CustomTkinter.
+
+### Архитектура
+
+```
+mtsbu-parser/
+├── app.py                   ← Точка входа GUI
+├── core/
+│   ├── parser.py            ← Парсинг HTML (выделен из check_policy.py)
+│   ├── checker.py           ← MtsbuChecker + поиск по госномеру/VIN
+│   └── finder.py            ← Алгоритм поиска даты окончания
+├── gui/
+│   ├── app_window.py        ← Главное окно + worker thread + Mica-эффект
+│   ├── input_frame.py       ← Радио (госномер/VIN) + поле + ✂️ Вставка
+│   ├── log_panel.py         ← Лог процесса с автоскроллом
+│   └── result_frame.py      ← Карточка результата + 📋 Копировать
+├── check_policy.py          ← CLI (обновлён, импорт из core/)
+├── find_policy_end.py       ← CLI (обновлён, импорт из core/)
+├── build.spec               ← PyInstaller spec
+└── dist/MTSBU_Parser.exe    ← Готовый .exe (58MB, без консоли)
+```
+
+### Что сделано
+
+#### Рефакторинг
+- `check_policy.py` разбит на `core/parser.py`, `core/checker.py`, `core/finder.py`
+- `find_policy_end.py` переписан на использование модулей и колбэков статуса
+- CLI-скрипты `check_policy.py` и `find_policy_end.py` сохранены (тонкие обёртки над core/)
+
+#### VIN-поиск
+- Добавлен метод `check_by_vin()` — вкладка `#vin` на policy.mtsbu.ua
+- Универсальный `_check()` для plate и VIN (без дублирования кода)
+
+#### Ссылка на полис
+- Захватывается `page.url` после отправки формы → сохраняется как `result["url"]`
+- Отображается в результатах и при копировании
+
+#### Ожидание результата (`_submit_and_wait`)
+- Вместо `wait_for_load_state` — цикл из 30 попыток по 1с
+- Проверяет смену URL (наличие `Search/...`) или появление слова "поліс" в HTML
+- Если страница не изменилась — читает текущий HTML
+
+#### Дебаг HTML
+- Если парсинг не нашёл полис — HTML сохраняется в `%TEMP%/mtsbu_debug_*.html` (первые 10k символов)
+
+#### Парсинг (улучшен)
+- Fallback на `main`/`article`/`body`, если нет `div.content`
+- Regex-поиск номера полиса по всему тексту, если не нашли в title_block
+- Возвращает `not found` только если совсем нет номера
+
+#### GUI (CustomTkinter)
+- **Окно:** 620x620, тёмная тема + синий акцент
+- **Стекло:** `alpha=0.97` + Mica-эффект (Windows 11) через `DwmSetWindowAttribute`
+- **Ввод:** радио «За госномером / За VIN-кодом», поле ввода, кнопка 📋 вставки
+- **Вставка:** `pyperclip.paste()` вместо `tkinter.clipboard_get()` (работает в frozen .exe)
+- **Ctrl+V / правый клик → Вставить**
+- **Лог:** процесс с иконками, автоскролл через `update_idletasks()`
+- **Результат:** карточка со всеми полями, ссылка на policy.mtsbu.ua
+- **Копирование:** кнопка «📋 Копіювати все» → форматированный текст в буфер
+- **Stale-защита:** последовательный номер поиска, старые результаты игнорируются
+- **Worker:** background thread + `after(0, ...)` для GUI-обновлений
+
+#### Сборка PyInstaller
+- `--onefile --windowed` — один .exe без консоли
+- `build.spec` с hiddenimports для `tkinter`, `customtkinter`, `playwright`, `cloakbrowser`, etc.
+- Размер: ~58MB (включает Python + Playwright + CloakBrowser + зависимости)
+
+### Ограничения
+- Первый запуск CloakBrowser скачивает бинарник ~200MB
+- VIN-таб использует предполагаемые селекторы (`#vin`, `#VinModel_VinCode`) — уточнить при необходимости
+- Mica-эффект только на Windows 11 (на Win10 просто тёмная тема)

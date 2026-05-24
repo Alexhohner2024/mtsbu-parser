@@ -1,179 +1,63 @@
 #!/usr/bin/env python3
 """
-Пошук дати закінчення полісу ОСЦПВ за госномером.
-
-Алгоритм:
-1. Отримуємо номер поточного полісу
-2. Експоненційний пошук назад — знаходимо межу (дата без цього полісу)
-3. Бінарний пошук між межами — точна дата початку
-4. Кінець = початок + 1 рік - 1 день
+Пошук дати закінчення полісу ОСЦПВ за госномером або VIN — CLI.
 
 Usage:
     python find_policy_end.py ВН1654ОА
-    python find_policy_end.py ВН1654ОА --headless
+    python find_policy_end.py --vin JTD...
 """
 
 import argparse
 import sys
-from datetime import datetime, timedelta
-from dateutil.relativedelta import relativedelta
 
-from check_policy import MtsbuChecker
-
-
-def date_to_str(d: datetime) -> str:
-    return d.strftime("%d.%m.%Y")
-
-
-def str_to_date(s: str) -> datetime:
-    return datetime.strptime(s, "%d.%m.%Y")
-
-
-def fmt_delta(days: int) -> str:
-    if days >= 365:
-        years = days // 365
-        rem = days % 365
-        if rem >= 30:
-            months = rem // 30
-            return f"{years}р {months}міс"
-        return f"{years}р"
-    if days >= 30:
-        months = days // 30
-        return f"{months}міс"
-    return f"{days}дн"
-
-
-def check_with_retry(checker: MtsbuChecker, plate: str, date_str: str, max_retries: int = 2) -> dict:
-    for attempt in range(max_retries + 1):
-        try:
-            return checker.check(plate, date_str)
-        except Exception as e:
-            if attempt < max_retries:
-                print(f"⚠️  помилка: {e}. Повтор {attempt+1}/{max_retries}...")
-            else:
-                print(f"❌ помилка після {max_retries+1} спроб: {e}")
-                return {"found": False, "error": str(e)}
-
-
-def find_policy_end(plate: str, headless: bool = False):
-    today = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-
-    print(f"🔍 Пошук дати закінчення полісу для {plate}")
-    print(f"📅 Сьогодні: {date_to_str(today)}")
-    print()
-
-    checker = MtsbuChecker(headless=headless)
-    try:
-        result_today = check_with_retry(checker, plate, date_to_str(today))
-        if not result_today.get("found"):
-            print("\n❌ Поліс не знайдено на сьогодні")
-            return None, None, None, None
-
-        policy_number = result_today["policyNumber"]
-        print(f"📋 Поточний поліс: №{policy_number}")
-
-        print("\n🔎 Експоненційний пошук меж...")
-        step = 180
-        offset = step
-        prev_date = today
-
-        for i in range(20):
-            check_date = today - timedelta(days=offset)
-            if check_date.year < 2010:
-                print("  ⛔ Дійшли до 2010 року — поліс діє дуже довго")
-                break
-
-            date_str = date_to_str(check_date)
-            print(f"  [{i+1}] Перевірка {date_str} (offset: -{offset}дн)...", end=" ", flush=True)
-
-            result = check_with_retry(checker, plate, date_str)
-            found_policy = result.get("policyNumber")
-
-            if found_policy == policy_number:
-                print(f"✅ той же поліс №{found_policy}")
-                prev_date = check_date
-                offset += step
-                step *= 2
-            else:
-                if result.get("found"):
-                    print(f"⚠️  інший поліс №{found_policy}")
-                else:
-                    print("❌ поліс не знайдено")
-                break
-        else:
-            print("  ⛔ Достигнут лимит шагов")
-
-        print("\n🎯 Бінарний пошук точної дати початку...")
-        low = check_date
-        high = prev_date
-
-        low_delta = (today - low).days
-        high_delta = (today - high).days
-        print(f"  Межі: {date_to_str(low)} — {date_to_str(high)} ({low_delta}–{high_delta}дн тому)")
-
-        iterations = 0
-        low_ord = low.toordinal()
-        high_ord = high.toordinal()
-
-        while high_ord - low_ord > 1:
-            mid_ord = (low_ord + high_ord) // 2
-            mid = datetime.fromordinal(mid_ord)
-            date_str = date_to_str(mid)
-            print(f"  [{iterations+1}] {date_str}...", end=" ", flush=True)
-
-            result = check_with_retry(checker, plate, date_str)
-            found_policy = result.get("policyNumber")
-
-            if found_policy == policy_number:
-                high_ord = mid_ord
-                print(f"✅ той же поліс (→ зсуваємо HIGH)")
-            else:
-                low_ord = mid_ord
-                if result.get("found"):
-                    print(f"⚠️  інший поліс №{found_policy} (→ зсуваємо LOW)")
-                else:
-                    print(f"❌ не знайдено (→ зсуваємо LOW)")
-
-            iterations += 1
-
-        start_date = datetime.fromordinal(high_ord)
-        end_date = start_date + relativedelta(years=1) - timedelta(days=1)
-        duration = (end_date - today).days
-        duration_str = fmt_delta(duration)
-
-        company = result_today.get("company", {})
-        vehicle = result_today.get("vehicle", {})
-        vehicle_model = vehicle.get("model") or vehicle.get("modelRaw") or ""
-
-        print(f"\n{'=' * 50}")
-        print(f"  📋 Результат для {plate}")
-        print(f"  🆔 Поліс №{policy_number}")
-        print(f"  🏢 СК: {company.get('name', 'N/A')}")
-        print(f"  🚗 Авто: {vehicle.get('make', '')} {vehicle_model}")
-        print(f"  📂 Тип: {vehicle.get('type', 'N/A')}")
-        print(f"  🔢 Госномер: {vehicle.get('plate', plate)}")
-        print(f"  🔍 VIN: {vehicle.get('vin', 'N/A')}")
-        print(f"  📅 Початок:   {date_to_str(start_date)}")
-        print(f"  ⏳ Закінчення: {date_to_str(end_date)}")
-        print(f"  ⏰ Залишилось: {duration_str} ({duration} дн)")
-        print(f"  📊 Перевірок: {i + 1 + iterations + 1}")
-        print(f"{'=' * 50}")
-
-        return policy_number, start_date, end_date, result_today
-
-    finally:
-        checker.close()
+from core.finder import find_policy_end, date_to_str
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Пошук дати закінчення полісу ОСЦПВ за госномером")
-    parser.add_argument("plate", help="Державний номер ТЗ (напр. ВН1654ОА)")
-    parser.add_argument("--headless", action="store_true", help="Запустити браузер без вікна")
+    parser = argparse.ArgumentParser(description="Пошук дати закінчення полісу ОСЦПВ за госномером або VIN")
+    parser.add_argument("query", nargs="?", help="Державний номер або VIN-код")
+    parser.add_argument("--vin", action="store_true", help="Пошук за VIN-кодом")
+
     args = parser.parse_args()
 
-    policy_number, start_date, end_date, info = find_policy_end(args.plate, headless=args.headless)
+    if not args.query:
+        parser.print_help()
+        return 1
 
-    return 0 if policy_number else 1
+    search_type = "vin" if args.vin else "plate"
+
+    policy_number, start_date, end_date, info = find_policy_end(
+        args.query,
+        search_type=search_type,
+        headless=True,
+    )
+
+    if not policy_number:
+        print("\n❌ Поліс не знайдено")
+        return 1
+
+    company = info.get("company", {})
+    vehicle = info.get("vehicle", {})
+    vehicle_model = vehicle.get("model") or vehicle.get("modelRaw") or ""
+
+    print(f"\n{'=' * 50}")
+    print(f"  📋 Результат для {args.query}")
+    print(f"  🆔 Поліс №{policy_number}")
+    if info.get("url"):
+        print(f"  🔗 Посилання: {info['url']}")
+    print(f"  🏢 СК: {company.get('name', 'N/A')}")
+    print(f"  🚗 Авто: {vehicle.get('make', '')} {vehicle_model}")
+    print(f"  📂 Тип: {vehicle.get('type', 'N/A')}")
+    print(f"  🔢 Госномер: {vehicle.get('plate', args.query)}")
+    print(f"  🔍 VIN: {vehicle.get('vin', 'N/A')}")
+    print(f"  📅 Початок:   {date_to_str(start_date)}")
+    print(f"  ⏳ Закінчення: {date_to_str(end_date)}")
+    print(f"  ⏰ Залишилось: {info.get('remaining_str', 'N/A')}")
+    total = info.get("checks_total", "?")
+    print(f"  📊 Перевірок: {total}")
+    print(f"{'=' * 50}")
+
+    return 0
 
 
 if __name__ == "__main__":
