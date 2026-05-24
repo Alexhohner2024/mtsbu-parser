@@ -73,7 +73,7 @@ def find_policy_end(plate: str, headless: bool = False):
         print(f"📋 Поточний поліс: №{policy_number}")
 
         print("\n🔎 Експоненційний пошук меж...")
-        step = 90
+        step = 180
         offset = step
         prev_date = today
 
