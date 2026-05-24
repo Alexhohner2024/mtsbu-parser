@@ -143,12 +143,13 @@ def find_policy_end(plate: str, headless: bool = False):
 
         company = result_today.get("company", {})
         vehicle = result_today.get("vehicle", {})
+        vehicle_model = vehicle.get("model") or vehicle.get("modelRaw") or ""
 
         print(f"\n{'=' * 50}")
         print(f"  📋 Результат для {plate}")
         print(f"  🆔 Поліс №{policy_number}")
         print(f"  🏢 СК: {company.get('name', 'N/A')}")
-        print(f"  🚗 Авто: {vehicle.get('make', '')} {vehicle.get('model', '')}")
+        print(f"  🚗 Авто: {vehicle.get('make', '')} {vehicle_model}")
         print(f"  📂 Тип: {vehicle.get('type', 'N/A')}")
         print(f"  🔢 Госномер: {vehicle.get('plate', plate)}")
         print(f"  🔍 VIN: {vehicle.get('vin', 'N/A')}")

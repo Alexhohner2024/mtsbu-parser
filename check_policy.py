@@ -108,8 +108,8 @@ def parse_result_page(html: str) -> dict:
         section = vehicle_header.parent
         vehicle_data = {
             "type": value_by_label(section, "Тип"),
-            "make": value_by_label(section, "Марка"),
-            "model": value_by_label(section, "Модель"),
+            "make": value_by_label(section, "Марка") or None,
+            "model": value_by_label(section, "Модель") or None,
             "plate": value_by_label(section, "Реєстраційний номер"),
             "vin": value_by_label(section, "VIN (номер кузова, шасі, рами)"),
         }
@@ -120,6 +120,13 @@ def parse_result_page(html: str) -> dict:
                 v = h.find_next_sibling("div", class_="value")
                 if v:
                     vehicle_data["registeredInUkraine"] = normalize_text(v.get_text())
+            if text == "Марка та модель":
+                v = h.find_next_sibling("div", class_="value")
+                if v:
+                    val = normalize_text(v.get_text())
+                    split = val.split(None, 1)
+                    vehicle_data["make"] = split[0] if split else None
+                    vehicle_data["modelRaw"] = split[1] if len(split) > 1 else None
 
         result["vehicle"] = vehicle_data
 
