@@ -97,18 +97,20 @@ class InputFrame(ctk.CTkFrame):
 
         self.search_type.trace_add("write", self._on_type_change)
 
-    def _paste_from_clipboard(self):
+    def _paste_from_clipboard(self) -> bool:
         try:
             text = pyperclip.paste()
             if text:
                 self.input_var.set(text.strip())
-                self.input_entry.icursor("end")
+                self.after(10, lambda: self.input_entry.icursor("end"))
+                return True
         except Exception:
             pass
+        return False
 
     def _on_ctrl_v(self, event=None):
-        self._paste_from_clipboard()
-        return "break"
+        if self._paste_from_clipboard():
+            return "break"
 
     def _show_context_menu(self, event):
         menu = ctk.CTkToplevel(self)
