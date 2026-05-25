@@ -46,6 +46,7 @@ class AppWindow(ctk.CTk):
 
         log_container = ctk.CTkFrame(self, fg_color=("gray85", "gray17"))
         log_container.grid(row=1, column=0, sticky="ew", padx=12, pady=(4, 4))
+        log_container.grid_propagate(False)
 
         log_label = ctk.CTkLabel(
             log_container,
@@ -55,7 +56,7 @@ class AppWindow(ctk.CTk):
         )
         log_label.pack(fill="x", padx=12, pady=(6, 0))
 
-        self.log_panel = LogPanel(log_container, height=120)
+        self.log_panel = LogPanel(log_container, height=170)
         self.log_panel.pack(fill="x", padx=8, pady=(2, 6))
 
         self.result_card = ResultCard(self)

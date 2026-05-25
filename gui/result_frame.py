@@ -33,7 +33,7 @@ def _fmt_label(icon: str, label: str, value: str) -> str:
     return f"{icon}  {label}: {value}"
 
 
-class ResultCard(ctk.CTkFrame):
+class ResultCard(ctk.CTkScrollableFrame):
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
         self._labels = []
