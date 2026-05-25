@@ -73,6 +73,7 @@ class InputFrame(ctk.CTkFrame):
 
         try:
             self.input_entry._entry.bind("<<Paste>>", self._on_paste, add="+")
+            self.input_entry._entry.bind("<Control-Key>", self._on_ctrl_key, add="+")
         except AttributeError:
             self.input_entry.bind("<<Paste>>", self._on_paste, add="+")
         self.input_entry.bind("<Button-3>", self._show_context_menu)
@@ -110,6 +111,10 @@ class InputFrame(ctk.CTkFrame):
         except Exception:
             pass
         return False
+
+    def _on_ctrl_key(self, event):
+        if event.keycode == 86:
+            return self._on_paste(event)
 
     def _on_paste(self, event):
         if self._paste_from_clipboard():
