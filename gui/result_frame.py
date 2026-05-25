@@ -13,43 +13,17 @@ class ResultCard(ctk.CTkFrame):
 
         if result.get("policyNumber"):
             lines.append(f"🆔 Поліс: №{result['policyNumber']}")
-        if result.get("url"):
-            lines.append(f"🔗 Посилання: {result['url']}")
         if result.get("status"):
             lines.append(f"📌 Статус: {result['status']}")
         if result.get("statusDate"):
             lines.append(f"📅 Дата статусу: {result['statusDate']}")
 
         company = result.get("company")
-        if company:
-            lines.append("")
-            lines.append("🏢 Страхова компанія:")
-            for key, label in [
-                ("name", "Назва"),
-                ("status", "Статус"),
-                ("edrpou", "ЄДРПОУ"),
-                ("address", "Адреса"),
-                ("phone", "Телефон"),
-                ("email", "Email"),
-            ]:
-                val = company.get(key)
-                if val:
-                    lines.append(f"  {label}: {val}")
-
-        vehicle = result.get("vehicle")
-        if vehicle:
-            lines.append("")
-            lines.append("🚗 Транспортний засіб:")
-            for key, label in [
-                ("type", "Тип"),
-                ("make", "Марка"),
-                ("model", "Модель"),
-                ("plate", "Госномер"),
-                ("vin", "VIN"),
-            ]:
-                val = vehicle.get(key)
-                if val:
-                    lines.append(f"  {label}: {val}")
+        if company and company.get("name"):
+            parts = [f"🏢 {company['name']}"]
+            if company.get("edrpou"):
+                parts.append(f"(ЄДРПОУ {company['edrpou']})")
+            lines.append(" ".join(parts))
 
         if result.get("start_date") and result.get("end_date"):
             lines.append("")
@@ -91,6 +65,8 @@ class ResultCard(ctk.CTkFrame):
         self.textbox.configure(state="normal")
         self.textbox.insert("0.0", text_content)
         self.textbox.configure(state="disabled")
+        self.textbox.bind("<Control-c>", self._copy_selection)
+        self.textbox.bind("<Control-C>", self._copy_selection)
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=16, pady=(0, 16))
@@ -113,6 +89,16 @@ class ResultCard(ctk.CTkFrame):
             self._show_toast("Скопійовано!")
         except Exception:
             self._show_toast("Не вдалося скопіювати")
+
+    def _copy_selection(self, event=None):
+        try:
+            selected = self.textbox.selection_get()
+            root = self.winfo_toplevel()
+            root.clipboard_clear()
+            root.clipboard_append(selected)
+        except Exception:
+            pass
+        return "break"
 
     def _show_toast(self, message: str):
         toast = ctk.CTkToplevel(self)
