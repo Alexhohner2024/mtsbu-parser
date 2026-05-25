@@ -20,7 +20,10 @@ class LogPanel(ctk.CTkScrollableFrame):
         self._scroll_to_bottom()
 
     def _scroll_to_bottom(self):
-        self.after(10, lambda: self._canvas.yview_moveto(1.0))
+        try:
+            self._parent_canvas.yview_moveto(1.0)
+        except Exception:
+            pass
 
     def clear(self):
         for widget in self.winfo_children():
