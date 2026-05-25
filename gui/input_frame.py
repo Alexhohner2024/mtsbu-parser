@@ -72,11 +72,9 @@ class InputFrame(ctk.CTkFrame):
         paste_btn.grid(row=0, column=1, padx=(0, 0))
 
         try:
-            self.input_entry._entry.bind("<Control-v>", self._on_ctrl_v, add="+")
-            self.input_entry._entry.bind("<<Paste>>", self._on_ctrl_v, add="+")
+            self.input_entry._entry.bind("<<Paste>>", self._on_paste, add="+")
         except AttributeError:
-            self.input_entry.bind("<Control-v>", self._on_ctrl_v, add="+")
-            self.input_entry.bind("<<Paste>>", self._on_ctrl_v, add="+")
+            self.input_entry.bind("<<Paste>>", self._on_paste, add="+")
         self.input_entry.bind("<Button-3>", self._show_context_menu)
 
         self.hint_label = ctk.CTkLabel(
@@ -113,7 +111,7 @@ class InputFrame(ctk.CTkFrame):
             pass
         return False
 
-    def _on_ctrl_v(self, event=None):
+    def _on_paste(self, event):
         if self._paste_from_clipboard():
             return "break"
 
