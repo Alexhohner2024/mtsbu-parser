@@ -71,7 +71,8 @@ class InputFrame(ctk.CTkFrame):
         )
         paste_btn.grid(row=0, column=1, padx=(0, 0))
 
-        self.input_entry.bind("<Control-v>", self._on_ctrl_v)
+        self.after(100, self._bind_inner_entry)
+        self.input_entry.bind("<<Paste>>", self._on_ctrl_v, add="+")
         self.input_entry.bind("<Button-3>", self._show_context_menu)
 
         self.hint_label = ctk.CTkLabel(
@@ -96,6 +97,13 @@ class InputFrame(ctk.CTkFrame):
         self.search_btn.pack(fill="x")
 
         self.search_type.trace_add("write", self._on_type_change)
+
+    def _bind_inner_entry(self):
+        try:
+            inner = self.input_entry._entry
+            inner.bind("<Control-v>", self._on_ctrl_v)
+        except AttributeError:
+            self.input_entry.bind("<Control-v>", self._on_ctrl_v, add="+")
 
     def _paste_from_clipboard(self) -> bool:
         try:
