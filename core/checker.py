@@ -33,11 +33,16 @@ class MtsbuChecker:
     def _get_browser(self):
         if self._browser is None:
             self._status("🚀", "Запуск браузера...")
-            self._browser = launch(
+            proxy_url = os.environ.get("PROXY_URL")
+            launch_kwargs = dict(
                 headless=True,
                 humanize=True,
                 args=["--fingerprint=12345"],
             )
+            if proxy_url:
+                launch_kwargs["proxy"] = {"server": proxy_url}
+                self._status("🌍", f"Proxy: {proxy_url[:30]}...")
+            self._browser = launch(**launch_kwargs)
         return self._browser
 
     def _wait_for_turnstile(self, page):
