@@ -66,8 +66,15 @@ def format_result(result: dict, query: str) -> str:
 
 
 def run_check(chat_id: str, query: str, qtype: str):
-    checker = MtsbuChecker(headless=True)
+    import traceback
     try:
+        send_telegram(chat_id, "🔧 Запускаю браузер...")
+        checker = MtsbuChecker(headless=True)
+    except Exception as e:
+        send_telegram(chat_id, f"⚠️ Помилка запуску браузера:\n`{traceback.format_exc()[-300:]}`")
+        return
+    try:
+        send_telegram(chat_id, "🌐 Браузер запущено, виконую запит...")
         date = datetime.now().strftime("%d.%m.%Y")
         if qtype == "vin":
             result = checker.check_by_vin(query, date)
@@ -75,9 +82,12 @@ def run_check(chat_id: str, query: str, qtype: str):
             result = checker.check_by_plate(query, date)
         send_telegram(chat_id, format_result(result, query))
     except Exception as e:
-        send_telegram(chat_id, f"⚠️ Помилка під час перевірки:\n`{e}`")
+        send_telegram(chat_id, f"⚠️ Помилка перевірки:\n`{traceback.format_exc()[-300:]}`")
     finally:
-        checker.close()
+        try:
+            checker.close()
+        except Exception:
+            pass
 
 
 def detect_type(query: str) -> str:
