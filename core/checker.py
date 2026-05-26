@@ -40,10 +40,36 @@ class MtsbuChecker:
             )
         return self._browser
 
+    def _wait_for_turnstile(self, page):
+        """Wait for Cloudflare Turnstile to solve before submitting."""
+        self._status("🛡️", "Очікування Cloudflare Turnstile...")
+        for _ in range(60):  # up to 60 seconds
+            solved = page.evaluate("""() => {
+                const f = document.querySelector('[name="cf-turnstile-response"]');
+                return f && f.value && f.value.length > 0;
+            }""")
+            if solved:
+                self._status("✅", "Turnstile пройдено")
+                return True
+            page.wait_for_timeout(1000)
+        self._status("⚠️", "Turnstile не вирішено за 60 сек")
+        return False
+
     def _submit_and_wait(self, page, query: str):
         self._status("🔍", "Надсилання запиту...")
-        submit_btn = page.locator('button[type="submit"], input[type="submit"]').first
-        submit_btn.wait_for(state="visible", timeout=30000)
+
+        # Wait for Turnstile CAPTCHA to be solved (button is disabled until then)
+        self._wait_for_turnstile(page)
+
+        submit_btn = page.locator('#submitBtn, button[type="submit"], input[type="submit"]').first
+        # Wait for button to be enabled
+        for _ in range(30):
+            disabled = submit_btn.evaluate("el => el.disabled")
+            if not disabled:
+                break
+            page.wait_for_timeout(1000)
+
+        submit_btn.wait_for(state="visible", timeout=10000)
 
         original_url = page.url
 
@@ -73,7 +99,7 @@ class MtsbuChecker:
         try:
             self._status("🌐", "Відкриття policy.mtsbu.ua...")
             page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(3000)
+            page.wait_for_timeout(5000)
 
             self._status("🔄", f"Вибір вкладки «{label}»...")
             tab = page.locator(tab_selector).first
