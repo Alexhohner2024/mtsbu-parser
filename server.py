@@ -1,8 +1,7 @@
 #!/usr/bin/env python3
 """
-Flask webhook server for Telegram bot via Make.com.
-Receives POST /check from Make.com, runs MtsbuChecker in background,
-then sends the result directly to Telegram Bot API.
+Flask webhook server for Telegram bot.
+Telegram sends updates directly to /webhook — no Make.com needed.
 """
 
 import os
@@ -81,24 +80,45 @@ def run_check(chat_id: str, query: str, qtype: str):
         checker.close()
 
 
-@app.route("/check", methods=["POST"])
-def check():
+def detect_type(query: str) -> str:
+    if len(query) == 17 and query.isalnum():
+        return "vin"
+    return "plate"
+
+
+@app.route("/webhook", methods=["POST"])
+def webhook():
     data = request.get_json(silent=True)
     if not data:
-        return jsonify({"error": "invalid json"}), 400
+        return jsonify({"ok": True}), 200
 
-    chat_id = str(data.get("chat_id", ""))
-    query = str(data.get("query", "")).strip().upper()
-    qtype = data.get("type", "plate")
+    message = data.get("message") or data.get("edited_message")
+    if not message:
+        return jsonify({"ok": True}), 200
 
-    if not chat_id or not query:
-        return jsonify({"error": "chat_id and query required"}), 400
+    chat_id = str(message.get("chat", {}).get("id", ""))
+    text = message.get("text", "").strip()
 
-    # Whitelist check — only allowed chat_id may use the service
+    if not text:
+        return jsonify({"ok": True}), 200
+
+    if text == "/start":
+        send_telegram(chat_id, "👋 Привіт! Надішли держномер або VIN-код — перевірю поліс ОСАГО.")
+        return jsonify({"ok": True}), 200
+
+    if text.startswith("/"):
+        return jsonify({"ok": True}), 200
+
     if ALLOWED_CHAT_ID and chat_id != ALLOWED_CHAT_ID:
-        return jsonify({"error": "forbidden"}), 403
+        send_telegram(chat_id, "⛔ Доступ заборонено.")
+        return jsonify({"ok": True}), 200
 
+    query = text.upper()
+    qtype = detect_type(query)
+
+    send_telegram(chat_id, "⏳ Перевіряю, зачекайте до 60 сек...")
     Thread(target=run_check, args=(chat_id, query, qtype), daemon=True).start()
+
     return jsonify({"ok": True}), 200
 
 
