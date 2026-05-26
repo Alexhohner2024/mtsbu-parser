@@ -132,6 +132,36 @@ def webhook():
     return jsonify({"ok": True}), 200
 
 
+@app.route("/debug", methods=["GET"])
+def debug():
+    """Open policy.mtsbu.ua and return what the page looks like from this server."""
+    from cloakbrowser import launch
+    try:
+        browser = launch(headless=True, humanize=True, args=["--fingerprint=12345"])
+        page = browser.new_page()
+        page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(5000)
+        html = page.content()
+        title = page.title()
+        url = page.url
+        # Extract forms and buttons
+        buttons = page.locator("button").all_text_contents()
+        inputs = page.locator("input").evaluate_all("els => els.map(e => ({type: e.type, id: e.id, name: e.name}))")
+        page.close()
+        browser.close()
+        return jsonify({
+            "title": title,
+            "url": url,
+            "html_length": len(html),
+            "buttons": buttons,
+            "inputs": inputs,
+            "html_snippet": html[:3000],
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"error": traceback.format_exc()}), 500
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"}), 200
