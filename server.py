@@ -134,29 +134,71 @@ def webhook():
 
 @app.route("/debug", methods=["GET"])
 def debug():
-    """Open policy.mtsbu.ua and return what the page looks like from this server."""
+    """Open policy.mtsbu.ua and return detailed element analysis."""
     from cloakbrowser import launch
     try:
         browser = launch(headless=True, humanize=True, args=["--fingerprint=12345"])
         page = browser.new_page()
         page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(5000)
-        html = page.content()
-        title = page.title()
-        url = page.url
-        # Extract forms and buttons
-        buttons = page.locator("button").all_text_contents()
-        inputs = page.locator("input").evaluate_all("els => els.map(e => ({type: e.type, id: e.id, name: e.name}))")
+        page.wait_for_timeout(8000)
+
+        result = page.evaluate("""() => {
+            // Button analysis
+            const allBtns = [...document.querySelectorAll('button')];
+            const btnDetails = allBtns.map(b => ({
+                text: b.textContent.trim(),
+                type: b.getAttribute('type'),
+                className: b.className,
+                id: b.id,
+                disabled: b.disabled,
+                visible: b.offsetParent !== null
+            }));
+
+            // Submit button check
+            const submitBtns = [...document.querySelectorAll('button[type="submit"], input[type="submit"]')];
+            const submitDetails = submitBtns.map(b => ({
+                tag: b.tagName,
+                type: b.type,
+                text: b.textContent?.trim(),
+                visible: b.offsetParent !== null
+            }));
+
+            // Tab links
+            const tabLinks = [...document.querySelectorAll('a[href="#carNumber"], a#carNumber-tab, a[href="#vin"], a#vin-tab')];
+            const tabDetails = tabLinks.map(a => ({
+                href: a.getAttribute('href'),
+                id: a.id,
+                text: a.textContent.trim(),
+                visible: a.offsetParent !== null
+            }));
+
+            // Radio buttons
+            const radios = [...document.querySelectorAll('input[type="radio"]')];
+            const radioDetails = radios.map(r => ({
+                name: r.name, value: r.value, id: r.id, checked: r.checked
+            }));
+
+            // Cloudflare Turnstile
+            const cfWidget = document.querySelector('[name="cf-turnstile-response"]');
+            const cfValue = cfWidget ? cfWidget.value : null;
+            const cfIframe = document.querySelector('iframe[src*="turnstile"]');
+
+            return {
+                buttons: btnDetails,
+                submitButtons: submitDetails,
+                tabs: tabDetails,
+                radios: radioDetails,
+                turnstile: {
+                    fieldExists: !!cfWidget,
+                    fieldValue: cfValue ? cfValue.substring(0, 50) + '...' : '(empty)',
+                    iframeExists: !!cfIframe
+                }
+            };
+        }""")
+
         page.close()
         browser.close()
-        return jsonify({
-            "title": title,
-            "url": url,
-            "html_length": len(html),
-            "buttons": buttons,
-            "inputs": inputs,
-            "html_snippet": html[:3000],
-        })
+        return jsonify(result)
     except Exception as e:
         import traceback
         return jsonify({"error": traceback.format_exc()}), 500
