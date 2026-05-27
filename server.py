@@ -165,7 +165,7 @@ def debug():
             launch_kwargs["proxy"] = proxy_cfg
         browser = launch(**launch_kwargs)
         page = browser.new_page()
-        page.goto("https://policy.mtsbu.ua/", wait_until="networkidle", timeout=60000)
+        page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
         page.wait_for_timeout(15000)
 
         result = page.evaluate("""() => {

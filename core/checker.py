@@ -119,7 +119,7 @@ class MtsbuChecker:
         page = browser.new_page()
         try:
             self._status("🌐", "Відкриття policy.mtsbu.ua...")
-            page.goto("https://policy.mtsbu.ua/", wait_until="networkidle", timeout=60000)
+            page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
             page.wait_for_timeout(3000)
 
             # Wait for Turnstile to solve
