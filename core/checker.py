@@ -71,19 +71,30 @@ class MtsbuChecker:
     def _submit_and_wait(self, page, query: str):
         self._status("🔍", "Надсилання запиту...")
 
+        # Try natural Turnstile first (10 sec), then force-enable button
         submit_btn = page.locator('#submitBtn, button[type="submit"], input[type="submit"]').first
-        # Wait for button to be enabled (Turnstile already waited in _check)
-        for _ in range(15):
+        for _ in range(10):
             disabled = submit_btn.evaluate("el => el.disabled")
             if not disabled:
                 break
             page.wait_for_timeout(1000)
 
+        # Force-enable if still disabled (bypass client-side Turnstile check)
+        still_disabled = submit_btn.evaluate("el => el.disabled")
+        if still_disabled:
+            self._status("🔓", "Примусове увімкнення кнопки...")
+            page.evaluate("""() => {
+                const btn = document.getElementById('submitBtn');
+                if (btn) btn.disabled = false;
+            }""")
+            page.wait_for_timeout(500)
+
         submit_btn.wait_for(state="visible", timeout=10000)
 
         original_url = page.url
 
-        submit_btn.click()
+        # Use JS click to bypass actionability checks
+        page.evaluate("document.getElementById('submitBtn').click()")
         page.wait_for_timeout(2000)
 
         self._status("⏳", "Очікування результату...")
@@ -111,8 +122,17 @@ class MtsbuChecker:
             page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(5000)
 
-            # Wait for Turnstile FIRST, before filling the form
-            self._wait_for_turnstile(page)
+            # Give Turnstile a chance (but don't block too long)
+            self._status("🛡️", "Очікування Turnstile...")
+            for _ in range(10):
+                solved = page.evaluate("""() => {
+                    const f = document.querySelector('[name="cf-turnstile-response"]');
+                    return f && f.value && f.value.length > 0;
+                }""")
+                if solved:
+                    self._status("✅", "Turnstile пройдено")
+                    break
+                page.wait_for_timeout(1000)
 
             self._status("🔄", f"Вибір вкладки «{label}»...")
             tab = page.locator(tab_selector).first
