@@ -24,7 +24,7 @@ try:
 except Exception:
     pass
 
-from core.checker import MtsbuChecker
+from core.checker_raw import RawPlaywrightChecker
 
 app = Flask(__name__)
 
@@ -78,8 +78,8 @@ def format_result(result: dict, query: str) -> str:
 def run_check(chat_id: str, query: str, qtype: str):
     import traceback
     try:
-        send_telegram(chat_id, "🔧 Запускаю браузер...")
-        checker = MtsbuChecker(headless=True)
+        send_telegram(chat_id, "🔧 Запускаю браузер (raw Playwright)...")
+        checker = RawPlaywrightChecker(headless=True)
     except Exception as e:
         send_telegram(chat_id, f"⚠️ Помилка запуску браузера:\n`{traceback.format_exc()[-300:]}`")
         return
@@ -224,6 +224,75 @@ def debug():
 
         page.close()
         browser.close()
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        return jsonify({"error": traceback.format_exc()}), 500
+
+
+@app.route("/debug-raw", methods=["GET"])
+def debug_raw():
+    """Test raw Playwright (no cloakbrowser) against policy.mtsbu.ua."""
+    from playwright.sync_api import sync_playwright
+    try:
+        pw = sync_playwright().start()
+        launch_args = [
+            "--disable-blink-features=AutomationControlled",
+            "--headless=new",
+            "--disable-dev-shm-usage",
+        ]
+        proxy_url = os.environ.get("PROXY_URL")
+        launch_kwargs = {"args": launch_args, "headless": False}
+        if proxy_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            proxy_cfg = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+            if parsed.username:
+                proxy_cfg["username"] = parsed.username
+            if parsed.password:
+                proxy_cfg["password"] = parsed.password
+            launch_kwargs["proxy"] = proxy_cfg
+
+        browser = pw.chromium.launch(**launch_kwargs)
+        ctx = browser.new_context(
+            viewport={"width": 1366, "height": 768},
+            locale="uk-UA",
+            timezone_id="Europe/Kyiv",
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+        )
+        ctx.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
+            window.chrome = {runtime: {}, loadTimes: function(){}, csi: function(){}};
+        """)
+        page = ctx.new_page()
+        page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
+        page.wait_for_timeout(15000)
+
+        result = page.evaluate("""() => {
+            const allBtns = [...document.querySelectorAll('button')];
+            const btnDetails = allBtns.map(b => ({
+                text: b.textContent.trim().substring(0, 50),
+                disabled: b.disabled,
+                visible: b.offsetParent !== null
+            }));
+            const cfWidget = document.querySelector('[name="cf-turnstile-response"]');
+            const cfIframe = document.querySelector('iframe[src*="turnstile"]');
+            const webdriver = navigator.webdriver;
+            return {
+                buttons: btnDetails,
+                turnstile: {
+                    fieldExists: !!cfWidget,
+                    fieldValue: cfWidget ? (cfWidget.value ? cfWidget.value.substring(0, 50) + '...' : '(empty)') : null,
+                    iframeExists: !!cfIframe
+                },
+                navigator_webdriver: webdriver,
+                url: window.location.href
+            };
+        }""")
+
+        ctx.close()
+        browser.close()
+        pw.stop()
         return jsonify(result)
     except Exception as e:
         import traceback
