@@ -71,12 +71,9 @@ class MtsbuChecker:
     def _submit_and_wait(self, page, query: str):
         self._status("🔍", "Надсилання запиту...")
 
-        # Wait for Turnstile CAPTCHA to be solved (button is disabled until then)
-        self._wait_for_turnstile(page)
-
         submit_btn = page.locator('#submitBtn, button[type="submit"], input[type="submit"]').first
-        # Wait for button to be enabled
-        for _ in range(30):
+        # Wait for button to be enabled (Turnstile already waited in _check)
+        for _ in range(15):
             disabled = submit_btn.evaluate("el => el.disabled")
             if not disabled:
                 break
@@ -113,6 +110,9 @@ class MtsbuChecker:
             self._status("🌐", "Відкриття policy.mtsbu.ua...")
             page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
             page.wait_for_timeout(5000)
+
+            # Wait for Turnstile FIRST, before filling the form
+            self._wait_for_turnstile(page)
 
             self._status("🔄", f"Вибір вкладки «{label}»...")
             tab = page.locator(tab_selector).first
