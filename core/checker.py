@@ -138,19 +138,29 @@ class MtsbuChecker:
             page.wait_for_timeout(2000)
 
             self._status("🔄", f"Вибір вкладки «{label}»...")
-            tab = page.locator(tab_selector).first
-            if tab.is_visible():
-                tab.click()
-                page.wait_for_timeout(1000)
+            # Use JS click to bypass cloakbrowser stability checks
+            page.evaluate(f"""() => {{
+                const tab = document.querySelector('{tab_selector.split(",")[0].strip()}');
+                if (tab) tab.click();
+            }}""")
+            page.wait_for_timeout(1000)
 
             self._status("✏️", f"Заповнення форми: {query}...")
-            inp = page.locator(input_selector).first
-            inp.wait_for(state="visible", timeout=10000)
-            page.wait_for_timeout(500)
-            inp.fill(query)
-
-            date_input = page.locator(date_selector).first
-            date_input.fill(date)
+            # Fill via JS to bypass cloakbrowser's element stability checks
+            page.evaluate(f"""(q, d) => {{
+                const inp = document.querySelector('{input_selector}');
+                const dateInp = document.querySelector('{date_selector}');
+                if (inp) {{
+                    inp.value = q;
+                    inp.dispatchEvent(new Event('input', {{bubbles: true}}));
+                    inp.dispatchEvent(new Event('change', {{bubbles: true}}));
+                }}
+                if (dateInp) {{
+                    dateInp.value = d;
+                    dateInp.dispatchEvent(new Event('input', {{bubbles: true}}));
+                    dateInp.dispatchEvent(new Event('change', {{bubbles: true}}));
+                }}
+            }}""", query, date)
 
             html, result_url = self._submit_and_wait(page, query)
 

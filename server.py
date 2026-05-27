@@ -152,10 +152,21 @@ def debug():
     """Open policy.mtsbu.ua and return detailed element analysis."""
     from cloakbrowser import launch
     try:
-        browser = launch(headless=True, humanize=True, args=["--fingerprint=12345"])
+        proxy_url = os.environ.get("PROXY_URL")
+        launch_kwargs = dict(headless=False, humanize=True, args=["--fingerprint=12345"])
+        if proxy_url:
+            from urllib.parse import urlparse
+            parsed = urlparse(proxy_url)
+            proxy_cfg = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+            if parsed.username:
+                proxy_cfg["username"] = parsed.username
+            if parsed.password:
+                proxy_cfg["password"] = parsed.password
+            launch_kwargs["proxy"] = proxy_cfg
+        browser = launch(**launch_kwargs)
         page = browser.new_page()
-        page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(8000)
+        page.goto("https://policy.mtsbu.ua/", wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(15000)
 
         result = page.evaluate("""() => {
             // Button analysis
