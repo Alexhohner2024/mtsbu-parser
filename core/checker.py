@@ -40,8 +40,16 @@ class MtsbuChecker:
                 args=["--fingerprint=12345"],
             )
             if proxy_url:
-                launch_kwargs["proxy"] = {"server": proxy_url}
-                self._status("🌍", f"Proxy: {proxy_url[:30]}...")
+                # Parse proxy URL: http://user:pass@host:port
+                from urllib.parse import urlparse
+                parsed = urlparse(proxy_url)
+                proxy_cfg = {"server": f"{parsed.scheme}://{parsed.hostname}:{parsed.port}"}
+                if parsed.username:
+                    proxy_cfg["username"] = parsed.username
+                if parsed.password:
+                    proxy_cfg["password"] = parsed.password
+                launch_kwargs["proxy"] = proxy_cfg
+                self._status("🌍", f"Proxy: {parsed.hostname}:{parsed.port}")
             self._browser = launch(**launch_kwargs)
         return self._browser
 
