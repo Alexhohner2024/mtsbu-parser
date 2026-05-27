@@ -119,12 +119,12 @@ class MtsbuChecker:
         page = browser.new_page()
         try:
             self._status("🌐", "Відкриття policy.mtsbu.ua...")
-            page.goto("https://policy.mtsbu.ua/", wait_until="domcontentloaded", timeout=60000)
-            page.wait_for_timeout(5000)
+            page.goto("https://policy.mtsbu.ua/", wait_until="networkidle", timeout=60000)
+            page.wait_for_timeout(3000)
 
-            # Give Turnstile a chance (but don't block too long)
+            # Wait for Turnstile to solve
             self._status("🛡️", "Очікування Turnstile...")
-            for _ in range(10):
+            for i in range(30):
                 solved = page.evaluate("""() => {
                     const f = document.querySelector('[name="cf-turnstile-response"]');
                     return f && f.value && f.value.length > 0;
@@ -134,14 +134,19 @@ class MtsbuChecker:
                     break
                 page.wait_for_timeout(1000)
 
+            # Wait for page to fully stabilize
+            page.wait_for_timeout(2000)
+
             self._status("🔄", f"Вибір вкладки «{label}»...")
             tab = page.locator(tab_selector).first
             if tab.is_visible():
                 tab.click()
-                page.wait_for_timeout(500)
+                page.wait_for_timeout(1000)
 
             self._status("✏️", f"Заповнення форми: {query}...")
             inp = page.locator(input_selector).first
+            inp.wait_for(state="visible", timeout=10000)
+            page.wait_for_timeout(500)
             inp.fill(query)
 
             date_input = page.locator(date_selector).first
