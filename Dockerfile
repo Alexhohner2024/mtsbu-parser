@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y \
     libdbus-1-3 libdrm2 libgbm1 libglib2.0-0 libnspr4 libnss3 \
     libpango-1.0-0 libx11-6 libxcb1 libxcomposite1 libxdamage1 \
     libxext6 libxfixes3 libxrandr2 libxrender1 libxtst6 \
-    xdg-utils libasound2 \
+    xdg-utils libasound2 xvfb \
     --no-install-recommends && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

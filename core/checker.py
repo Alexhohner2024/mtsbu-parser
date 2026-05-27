@@ -35,7 +35,7 @@ class MtsbuChecker:
             self._status("🚀", "Запуск браузера...")
             proxy_url = os.environ.get("PROXY_URL")
             launch_kwargs = dict(
-                headless=True,
+                headless=False,
                 humanize=True,
                 args=["--fingerprint=12345"],
             )

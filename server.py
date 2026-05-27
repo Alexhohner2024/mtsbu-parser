@@ -6,6 +6,7 @@ Telegram sends updates directly to /webhook — no Make.com needed.
 
 import os
 import sys
+import subprocess
 from datetime import datetime
 from threading import Thread
 
@@ -13,6 +14,15 @@ import requests
 from flask import Flask, jsonify, request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Start Xvfb virtual display so browser runs in non-headless mode
+# This helps bypass Cloudflare Turnstile headless detection
+try:
+    subprocess.Popen(["Xvfb", ":99", "-screen", "0", "1280x720x24", "-nolisten", "tcp"],
+                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    os.environ["DISPLAY"] = ":99"
+except Exception:
+    pass
 
 from core.checker import MtsbuChecker
 
@@ -80,6 +90,11 @@ def run_check(chat_id: str, query: str, qtype: str):
             result = checker.check_by_vin(query, date)
         else:
             result = checker.check_by_plate(query, date)
+
+        # Debug: send URL and HTML snippet
+        dbg_url = result.get("url", "N/A")
+        send_telegram(chat_id, f"🔍 Debug URL: {dbg_url}")
+
         send_telegram(chat_id, format_result(result, query))
     except Exception as e:
         send_telegram(chat_id, f"⚠️ Помилка перевірки:\n`{traceback.format_exc()[-300:]}`")
