@@ -64,10 +64,11 @@ class ResultCard(ctk.CTkFrame):
         self.textbox.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         self.textbox.configure(state="normal")
         self.textbox.insert("0.0", text_content)
-        # Keep state=normal so text is selectable; block only editing keys
-        self.textbox.bind("<Key>", lambda e: "break" if len(e.char) == 1 else None)
+        # Block only printable input (not control shortcuts like Ctrl+C)
+        self.textbox.bind("<Key>", lambda e: "break" if e.char and e.char.isprintable() else None)
         self.textbox.bind("<Control-c>", self._copy_selection)
         self.textbox.bind("<Control-C>", self._copy_selection)
+        self.textbox.bind("<Button-3>", self._show_context_menu)
 
         btn_frame = ctk.CTkFrame(self, fg_color="transparent")
         btn_frame.pack(fill="x", padx=16, pady=(0, 16))
@@ -90,6 +91,13 @@ class ResultCard(ctk.CTkFrame):
             self._show_toast("Скопійовано!")
         except Exception:
             self._show_toast("Не вдалося скопіювати")
+
+    def _show_context_menu(self, event):
+        import tkinter as tk
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Копіювати виділене", command=self._copy_selection)
+        menu.add_command(label="Копіювати все", command=self._copy_all)
+        menu.tk_popup(event.x_root, event.y_root)
 
     def _copy_selection(self, event=None):
         try:
