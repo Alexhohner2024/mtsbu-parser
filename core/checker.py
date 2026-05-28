@@ -26,6 +26,7 @@ class MtsbuChecker:
         self.headless = headless
         self.status_cb = status_cb
         self._browser = None
+        self.suppress_debug = False  # set True during binary search to silence expected "not found"
 
     def _status(self, icon: str, message: str):
         if self.status_cb:
@@ -168,14 +169,15 @@ class MtsbuChecker:
             result = parse_result_page(html)
             result["url"] = result_url
 
-            if not result.get("found"):
+            if not result.get("found") and not self.suppress_debug:
                 _save_debug_html(html, label[:3], query)
                 self._status("⚠️", f"Парсер не знайшов поліс. HTML збережено в {tempfile.gettempdir()}")
 
-            if result.get("found"):
-                self._status("✅", "Поліс знайдено!")
-            else:
-                self._status("❌", "Поліс не знайдено")
+            if not self.suppress_debug:
+                if result.get("found"):
+                    self._status("✅", "Поліс знайдено!")
+                else:
+                    self._status("❌", "Поліс не знайдено")
 
             return result
 
