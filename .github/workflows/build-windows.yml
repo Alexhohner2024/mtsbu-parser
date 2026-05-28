@@ -1,0 +1,45 @@
+name: Build Windows EXE
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "dist/**"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --noconfirm --onefile --windowed `
+            --name MTSBU_Parser `
+            --add-data "gui;gui" `
+            --add-data "core;core" `
+            --collect-all cloakbrowser `
+            --collect-all customtkinter `
+            --hidden-import dateutil `
+            app.py
+
+      - name: Commit EXE to dist/
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/MTSBU_Parser.exe
+          git commit -m "build: update MTSBU_Parser.exe [skip ci]"
+          git push
