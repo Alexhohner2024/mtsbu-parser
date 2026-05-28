@@ -7,12 +7,17 @@ on:
       - "dist/**"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-latest
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -40,6 +45,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dist/MTSBU_Parser.exe
+          git add -f dist/MTSBU_Parser.exe
           git commit -m "build: update MTSBU_Parser.exe [skip ci]"
-          git push
+          git push https://x-access-token:${{ env.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git HEAD:main
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
