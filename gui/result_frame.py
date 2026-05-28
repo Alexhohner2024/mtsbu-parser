@@ -39,9 +39,10 @@ class ResultCard(ctk.CTkFrame):
                 parts.append(f"(ЄДРПОУ {company['edrpou']})")
             lines.append(" ".join(parts))
 
-        if result.get("start_date") and result.get("end_date"):
+        if result.get("end_date"):
             lines.append("")
-            lines.append(f"📅 Початок: {result['start_date']}")
+            if result.get("start_date"):
+                lines.append(f"📅 Початок: {result['start_date']}")
             lines.append(f"⏳ Закінчення: {result['end_date']}")
             if expired:
                 overdue = result.get("overdue_str") or result.get("overdue_days")

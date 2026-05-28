@@ -104,64 +104,16 @@ def _find_expired_policy(checker, search_type, query, today):
 
     checker.suppress_debug = False
     end_date = datetime.fromordinal(low_ord)
-    checker._status("📋", f"Поліс закінчився: {date_to_str(end_date)}")
-
-    # Step 3: find start date (exponential + binary backwards from end_date)
-    checker._status("📅", "Крок 3/3: пошук дати початку...")
-    checker.suppress_debug = True
-    step = 180
-    offset = step
-    prev_date = end_date
-    check_date = end_date - timedelta(days=step)
-    start_i = 0
-
-    for start_i in range(20):
-        check_date = end_date - timedelta(days=offset)
-        if check_date.year < 2010:
-            checker._status("⛔", "Дійшли до 2010")
-            break
-        checker._status("🔍", f"[{start_i+1}] {date_to_str(check_date)}...")
-        result = check_with_retry(checker, search_type, query, date_to_str(check_date))
-        if result.get("policyNumber") == policy_number:
-            checker._status("✅", "Той же поліс")
-            prev_date = check_date
-            offset += step
-            step *= 2
-        else:
-            checker._status("❌", "Інший/не знайдено")
-            break
-
-    low_ord2 = check_date.toordinal()
-    high_ord2 = prev_date.toordinal()
-    bin2_i = 0
-
-    while high_ord2 - low_ord2 > 1:
-        mid_ord = (low_ord2 + high_ord2) // 2
-        mid = datetime.fromordinal(mid_ord)
-        bin2_i += 1
-        checker._status("🎯", f"[{bin2_i}] {date_to_str(mid)}...")
-        result = check_with_retry(checker, search_type, query, date_to_str(mid))
-        if result.get("policyNumber") == policy_number:
-            high_ord2 = mid_ord
-            checker._status("✅", "Той же поліс")
-        else:
-            low_ord2 = mid_ord
-            checker._status("❌", "Інший/не знайдено")
-
-    checker.suppress_debug = False
-
-    start_date = datetime.fromordinal(high_ord2)
     overdue_days = (today - end_date).days
 
-    last_found_result["start_date"] = date_to_str(start_date)
     last_found_result["end_date"] = date_to_str(end_date)
     last_found_result["overdue_days"] = overdue_days
     last_found_result["overdue_str"] = fmt_delta(overdue_days)
     last_found_result["expired"] = True
-    last_found_result["checks_total"] = i + 1 + bin_i + start_i
+    last_found_result["checks_total"] = i + 1 + bin_i
 
     checker._status("⚠️", f"Поліс прострочений на {fmt_delta(overdue_days)}!")
-    return policy_number, start_date, end_date, last_found_result
+    return policy_number, None, end_date, last_found_result
 
 
 def find_policy_end(
