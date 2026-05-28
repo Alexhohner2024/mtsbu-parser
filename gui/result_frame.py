@@ -9,17 +9,31 @@ class ResultCard(ctk.CTkFrame):
         self._query = None
 
     def _format_result(self, result: dict, query: str) -> str:
+        expired = result.get("expired", False)
         lines = [f"🔍 Запит: {query}", ""]
 
         if result.get("policyNumber"):
             lines.append(f"🆔 Поліс: №{result['policyNumber']}")
         if result.get("status"):
             lines.append(f"📌 Статус: {result['status']}")
-        if result.get("statusDate"):
-            lines.append(f"📅 Дата статусу: {result['statusDate']}")
+
+        vehicle = result.get("vehicle")
+        if vehicle:
+            lines.append("")
+            parts = []
+            if vehicle.get("make"):
+                parts.append(vehicle["make"])
+            if vehicle.get("model"):
+                parts.append(vehicle["model"])
+            lines.append(f"🚗 Авто: {' '.join(parts) if parts else 'N/A'}")
+            if vehicle.get("plate"):
+                lines.append(f"🔢 Госномер: {vehicle['plate']}")
+            if vehicle.get("vin"):
+                lines.append(f"🔍 VIN: {vehicle['vin']}")
 
         company = result.get("company")
         if company and company.get("name"):
+            lines.append("")
             parts = [f"🏢 {company['name']}"]
             if company.get("edrpou"):
                 parts.append(f"(ЄДРПОУ {company['edrpou']})")
@@ -29,12 +43,18 @@ class ResultCard(ctk.CTkFrame):
             lines.append("")
             lines.append(f"📅 Початок: {result['start_date']}")
             lines.append(f"⏳ Закінчення: {result['end_date']}")
-            remaining = result.get("remaining_str") or result.get("remaining_days")
-            if remaining:
-                lines.append(f"⏰ Залишилось: {remaining}")
-            total = result.get("checks_total")
-            if total:
-                lines.append(f"📊 Перевірок: {total}")
+            if expired:
+                overdue = result.get("overdue_str") or result.get("overdue_days")
+                if overdue:
+                    lines.append(f"🚨 Прострочено: {overdue}")
+            else:
+                remaining = result.get("remaining_str") or result.get("remaining_days")
+                if remaining:
+                    lines.append(f"⏰ Залишилось: {remaining}")
+
+        total = result.get("checks_total")
+        if total:
+            lines.append(f"📊 Перевірок: {total}")
 
         return "\n".join(lines)
 
@@ -43,10 +63,12 @@ class ResultCard(ctk.CTkFrame):
         self._result_data = result
         self._query = query
 
+        expired = result.get("expired", False)
         header = ctk.CTkLabel(
             self,
-            text="✅  Результат пошуку",
+            text="⚠️  Поліс прострочений" if expired else "✅  Результат пошуку",
             font=ctk.CTkFont(size=16, weight="bold"),
+            text_color=("orange", "#FFA500") if expired else ("gray10", "gray90"),
             anchor="w",
         )
         header.pack(fill="x", padx=16, pady=(12, 4))
