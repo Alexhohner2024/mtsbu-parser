@@ -51,52 +51,59 @@ def check_with_retry(
 
 
 def _find_expired_policy(checker, search_type, query, today):
-    # Step 1: check fixed offsets from far to near, WITHOUT stopping —
-    # to get the tightest lower bound (closest found date to today)
+    # Step 1: scan from far to near, stop at first found→not-found transition.
+    # This gives us a tight bracket [last_found_date, upper_bound] for binary search.
     offsets = [720, 360, 180, 90, 45]
     last_found_date = None
     last_found_result = None
+    upper_bound = today  # will be tightened to the first "not found" after a "found"
 
+    checker._status("📅", "Крок 1/3: пошук останнього полісу...")
     for i, offset in enumerate(offsets):
         check_date = today - timedelta(days=offset)
         if check_date.year < 2010:
             continue
-        checker._status("🔍", f"[{i+1}/{len(offsets)}] Перевірка {date_to_str(check_date)} (-{offset}дн)...")
+        checker._status("🔍", f"[{i+1}/{len(offsets)}] {date_to_str(check_date)} (-{offset}дн)...")
         result = check_with_retry(checker, search_type, query, date_to_str(check_date))
         if result.get("found"):
             last_found_date = check_date
             last_found_result = result
+        else:
+            if last_found_date:
+                # First transition found→not-found: tight bracket acquired, stop
+                upper_bound = check_date
+                break
 
     if not last_found_date:
         checker._status("❌", "Поліс не знайдено за останні 2 роки")
         return None, None, None, None
 
     policy_number = last_found_result.get("policyNumber")
-    checker._status("📋", f"Останній поліс №{policy_number}, активний {date_to_str(last_found_date)}")
+    checker._status("📋", f"Поліс №{policy_number} активний {date_to_str(last_found_date)}")
 
-    # Step 2: binary search for exact last day the policy was valid
-    checker._status("🎯", "Бінарний пошук дати закінчення...")
+    # Step 2: binary search for exact last valid day within [last_found_date, upper_bound]
+    checker._status("📅", f"Крок 2/3: точна дата закінчення ({date_to_str(last_found_date)} — {date_to_str(upper_bound)})...")
     low_ord = last_found_date.toordinal()
-    high_ord = today.toordinal()
+    high_ord = upper_bound.toordinal()
     bin_i = 0
 
     while high_ord - low_ord > 1:
         mid_ord = (low_ord + high_ord) // 2
         mid = datetime.fromordinal(mid_ord)
+        bin_i += 1
+        checker._status("🎯", f"[{bin_i}] {date_to_str(mid)}...")
         result = check_with_retry(checker, search_type, query, date_to_str(mid))
         if result.get("found") and result.get("policyNumber") == policy_number:
             low_ord = mid_ord
             last_found_result = result
         else:
             high_ord = mid_ord
-        bin_i += 1
-        checker._status("🎯", f"[{bin_i}] {date_to_str(mid)} → {'✅' if result.get('found') else '❌'}")
 
     end_date = datetime.fromordinal(low_ord)
     checker._status("📋", f"Поліс закінчився: {date_to_str(end_date)}")
 
-    # Step 3: find start of this expired policy (exponential + binary backwards from end_date)
-    checker._status("🔎", "Пошук дати початку полісу...")
+    # Step 3: find start date (exponential + binary backwards from end_date)
+    checker._status("📅", "Крок 3/3: пошук дати початку...")
     step = 180
     offset = step
     prev_date = end_date
@@ -136,7 +143,7 @@ def _find_expired_policy(checker, search_type, query, today):
     last_found_result["overdue_days"] = overdue_days
     last_found_result["overdue_str"] = fmt_delta(overdue_days)
     last_found_result["expired"] = True
-    last_found_result["checks_total"] = len(offsets) + bin_i + start_i
+    last_found_result["checks_total"] = i + 1 + bin_i + start_i
 
     checker._status("⚠️", f"Поліс прострочений на {fmt_delta(overdue_days)}!")
     return policy_number, start_date, end_date, last_found_result
