@@ -64,7 +64,8 @@ class ResultCard(ctk.CTkFrame):
         self.textbox.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         self.textbox.configure(state="normal")
         self.textbox.insert("0.0", text_content)
-        self.textbox.configure(state="disabled")
+        # Keep state=normal so text is selectable; block only editing keys
+        self.textbox.bind("<Key>", lambda e: "break" if len(e.char) == 1 else None)
         self.textbox.bind("<Control-c>", self._copy_selection)
         self.textbox.bind("<Control-C>", self._copy_selection)
 

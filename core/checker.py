@@ -23,6 +23,7 @@ def _save_debug_html(html: str, prefix: str, plate: str):
 
 class MtsbuChecker:
     def __init__(self, headless: bool = False, status_cb: Optional[StatusCallback] = None):
+        self.headless = headless
         self.status_cb = status_cb
         self._browser = None
 
@@ -35,7 +36,7 @@ class MtsbuChecker:
             self._status("🚀", "Запуск браузера...")
             proxy_url = os.environ.get("PROXY_URL")
             launch_kwargs = dict(
-                headless=False,
+                headless=self.headless,
                 humanize=True,
                 args=["--fingerprint=12345"],
             )
@@ -147,7 +148,7 @@ class MtsbuChecker:
 
             self._status("✏️", f"Заповнення форми: {query}...")
             # Fill via JS to bypass cloakbrowser's element stability checks
-            page.evaluate(f"""(q, d) => {{
+            page.evaluate(f"""([q, d]) => {{
                 const inp = document.querySelector('{input_selector}');
                 const dateInp = document.querySelector('{date_selector}');
                 if (inp) {{
@@ -160,7 +161,7 @@ class MtsbuChecker:
                     dateInp.dispatchEvent(new Event('input', {{bubbles: true}}));
                     dateInp.dispatchEvent(new Event('change', {{bubbles: true}}));
                 }}
-            }}""", query, date)
+            }}""", [query, date])
 
             html, result_url = self._submit_and_wait(page, query)
 
