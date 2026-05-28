@@ -305,3 +305,46 @@ def _scroll_to_bottom(self):
 - `_on_ctrl_v` возвращает `"break"` **только** при успешном pyperclip; иначе событие уходит к системному обработчику tkinter
 
 **Проверено:** `_entry` — это `tkinter.Entry`, существует сразу после `CTkEntry()`. Биндинг `<Control-v>` и `<<Paste>>` на нём работают для реальных нажатий клавиш.
+
+---
+
+## Дата: 28.05.2026 — Crash fix + автосборка (v2.2)
+
+### Исправление: краш `'NoneType' object has no attribute 'write'`
+
+**Файл:** `app.py`
+
+**Проблема:** В PyInstaller `--windowed` режиме (без консоли) `sys.stdout` и `sys.stderr` равны `None`. `cloakbrowser` при инициализации пишет в `sys.stdout` → краш сразу при запуске `.exe`. При этом сама проверка страховки могла бы сработать — программа падала ещё до открытия браузера.
+
+**Симптом:** В GUI появлялось сообщение `⚠ Помилка: 'NoneType' object has no attribute 'write'. Повтор 2/2...` → `❌ Поліс не знайдено`, хотя страховка реально существует.
+
+**Решение:** Перед любыми импортами в `app.py` добавлен редирект потоков в `os.devnull`:
+
+```python
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+```
+
+**Почему `cloakbrowser`, а не raw Playwright:** `cloakbrowser` специально добавлялся для автоматического обхода Cloudflare Turnstile (коммит `2a4f59d`). Raw Playwright не гарантирует прохождение капчи. Проблема была не в библиотеке, а в PyInstaller windowed mode.
+
+**Коммит:** `32c5823`
+
+---
+
+### Автосборка `.exe` через GitHub Actions
+
+**Файл:** `.github/workflows/build-windows.yml`
+
+**Зачем:** Ручная сборка неудобна при частых доработках. Теперь при каждом push в `main` GitHub автоматически собирает новый `MTSBU_Parser.exe` и коммитит его обратно в `dist/`.
+
+**Как работает:**
+1. Push кода в `main` → запускается `Build Windows EXE`
+2. GitHub Actions: Windows runner, Python 3.11, `pip install -r requirements.txt pyinstaller`
+3. PyInstaller собирает `--onefile --windowed` с `--collect-all cloakbrowser customtkinter`
+4. Готовый `.exe` коммитится в `dist/MTSBU_Parser.exe` с сообщением `build: update MTSBU_Parser.exe [skip ci]`
+5. `[skip ci]` предотвращает бесконечный цикл пересборки
+6. `paths-ignore: dist/**` — пуш самого `.exe` тоже не запускает сборку
+
+**Для получения новой версии:** Pull в GitHub Desktop → `dist/MTSBU_Parser.exe` обновлён.
