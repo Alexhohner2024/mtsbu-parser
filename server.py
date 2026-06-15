@@ -147,6 +147,33 @@ def webhook():
     return jsonify({"ok": True}), 200
 
 
+@app.route("/check", methods=["POST"])
+def check():
+    import traceback
+    data = request.get_json(silent=True) or {}
+    query = data.get("query", "").strip().upper()
+    if not query:
+        return jsonify({"error": "query is required"}), 400
+
+    qtype = data.get("type") or detect_type(query)
+
+    checker = RawPlaywrightChecker(headless=True)
+    try:
+        date = datetime.now().strftime("%d.%m.%Y")
+        if qtype == "vin":
+            result = checker.check_by_vin(query, date)
+        else:
+            result = checker.check_by_plate(query, date)
+        return jsonify({"result": result, "text": format_result(result, query)}), 200
+    except Exception:
+        return jsonify({"error": traceback.format_exc()}), 500
+    finally:
+        try:
+            checker.close()
+        except Exception:
+            pass
+
+
 @app.route("/debug", methods=["GET"])
 def debug():
     """Open policy.mtsbu.ua and return detailed element analysis."""
