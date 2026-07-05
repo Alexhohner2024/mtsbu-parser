@@ -135,8 +135,8 @@ class MtsbuChecker:
         """Wait for Cloudflare Turnstile to auto-solve, then try click if needed."""
         self._status("🛡️", "Очікування Cloudflare Turnstile...")
 
-        # Phase 1: Wait for auto-solve with longer timeout (Turnstile may need more time on servers)
-        for i in range(45):
+        # Phase 1: Short wait for auto-solve (5 seconds max)
+        for i in range(5):
             solved = page.evaluate("""() => {
                 const f = document.querySelector('[name="g-recaptcha-response"]');
                 if (f && f.value && f.value.length > 0) return true;
@@ -148,16 +148,13 @@ class MtsbuChecker:
                 self._status("✅", "Turnstile пройдено (авто)")
                 return True
             page.wait_for_timeout(1000)
-            if i % 10 == 9:
-                self._status("🛡️", f"Очікування Turnstile... ({i+1}с)")
 
-        # Phase 2: Try clicking the Turnstile checkbox
+        # Phase 2: Try clicking the Turnstile checkbox (5 seconds max)
         self._status("🖱️", "Спроба кліку по Turnstile...")
         clicked = _try_click_turnstile(page, self._status)
 
         if clicked:
-            # Wait for Turnstile to process after click
-            for i in range(20):
+            for i in range(5):
                 solved = page.evaluate("""() => {
                     const f = document.querySelector('[name="g-recaptcha-response"]');
                     if (f && f.value && f.value.length > 0) return true;
@@ -170,7 +167,7 @@ class MtsbuChecker:
                     return True
                 page.wait_for_timeout(1000)
 
-        self._status("⚠️", "Turnstile не вирішено")
+        self._status("⚠️", "Turnstile не вирішено — подаємо форму все одно")
         return False
 
     def _submit_and_wait(self, page, query: str):
@@ -254,21 +251,12 @@ class MtsbuChecker:
         page = context.new_page()
         try:
             turnstile_solved = False
-            max_attempts = 3
 
-            for attempt in range(max_attempts):
-                self._status("🌐", f"Відкриття policy.mtsbu.ua... (спроба {attempt+1}/{max_attempts})")
-                page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
-                page.wait_for_timeout(3000)
+            self._status("🌐", f"Відкриття policy.mtsbu.ua...")
+            page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
+            page.wait_for_timeout(3000)
 
-                turnstile_solved = self._wait_for_turnstile(page)
-
-                if turnstile_solved:
-                    break
-
-                if attempt < max_attempts - 1:
-                    self._status("🔄", f"Повтор завантаження сторінки...")
-                    page.wait_for_timeout(2000)
+            turnstile_solved = self._wait_for_turnstile(page)
 
             if not turnstile_solved:
                 self._status("⚠️", f"Turnstile не вирішено — продовжуємо все одно")
