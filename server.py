@@ -12,11 +12,15 @@ import os
 import sys
 import subprocess
 import time
+import logging
 from datetime import datetime
 from threading import Thread, Lock
 
 import requests
 from flask import Flask, jsonify, request
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(message)s')
+log = logging.getLogger('mtsbu')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -174,9 +178,11 @@ def format_progress(icon: str, message: str, query: str) -> str:
 def run_check(chat_id: str, query: str, qtype: str):
     """Full policy search with real-time progress via message editing."""
     import traceback
+    log.info(f"run_check START chat={chat_id} query={query} type={qtype}")
 
     # Send initial message
     msg_id = send_telegram(chat_id, f"🔍 Перевіряю `{query}`... Зачекайте.")
+    log.info(f"Initial message sent, msg_id={msg_id}")
 
     def status_cb(icon: str, message: str):
         """Called by finder/checker for every status update."""
@@ -186,12 +192,14 @@ def run_check(chat_id: str, query: str, qtype: str):
     editor = ThrottledEditor(chat_id, msg_id)
 
     try:
+        log.info("Calling find_policy_end...")
         policy_number, start_date, end_date, result = find_policy_end(
             query=query,
             search_type=qtype,
             headless=False,
             status_cb=status_cb,
         )
+        log.info(f"find_policy_end DONE: policy={policy_number}")
 
         # Send final result
         if result:
@@ -202,6 +210,7 @@ def run_check(chat_id: str, query: str, qtype: str):
         editor.force_update(final_text)
 
     except Exception as e:
+        log.error(f"run_check ERROR: {e}")
         error_text = (
             f"❌ *Помилка*\n"
             f"🔍 `{query}`\n"
@@ -241,6 +250,7 @@ def webhook():
 
     chat_id = str(message.get("chat", {}).get("id", ""))
     text = message.get("text", "").strip()
+    log.info(f"Webhook: chat={chat_id} text={text}")
 
     if not text:
         return jsonify({"ok": True}), 200
