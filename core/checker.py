@@ -33,8 +33,7 @@ def _launch_browser(headless: bool = True, proxy_url: str = None):
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-infobars",
-        "--window-size=1920,1080",
-        "--window-position=-2000,-2000",
+        "--window-size=1280,800",
     ]
 
     launch_kwargs = dict(
