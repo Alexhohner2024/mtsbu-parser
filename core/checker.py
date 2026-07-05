@@ -254,8 +254,33 @@ class MtsbuChecker:
             for attempt in range(max_attempts):
                 self._status("🌐", f"Відкриття policy.mtsbu.ua... (спроба {attempt+1}/{max_attempts})")
                 page.goto("https://policy.mtsbu.ua/", wait_until="load", timeout=60000)
-                page.wait_for_timeout(3000)
+                page.wait_for_timeout(2000)
 
+                # Switch tab and fill form FIRST (Turnstile only blocks submit button)
+                self._status("🔄", f"Вибір вкладки «{label}»...")
+                page.evaluate(f"""() => {{
+                    const tab = document.querySelector('{tab_selector.split(",")[0].strip()}');
+                    if (tab) tab.click();
+                }}""")
+                page.wait_for_timeout(1000)
+
+                self._status("✏️", f"Заповнення форми: {query}...")
+                page.evaluate(f"""([q, d]) => {{
+                    const inp = document.querySelector('{input_selector}');
+                    const dateInp = document.querySelector('{date_selector}');
+                    if (inp) {{
+                        inp.value = q;
+                        inp.dispatchEvent(new Event('input', {{bubbles: true}}));
+                        inp.dispatchEvent(new Event('change', {{bubbles: true}}));
+                    }}
+                    if (dateInp) {{
+                        dateInp.value = d;
+                        dateInp.dispatchEvent(new Event('input', {{bubbles: true}}));
+                        dateInp.dispatchEvent(new Event('change', {{bubbles: true}}));
+                    }}
+                }}""", [query, date])
+
+                # NOW wait for Turnstile (form already filled)
                 turnstile_solved = self._wait_for_turnstile(page)
 
                 if turnstile_solved:
@@ -267,32 +292,6 @@ class MtsbuChecker:
 
             if not turnstile_solved:
                 self._status("⚠️", f"Turnstile не вирішено — продовжуємо все одно")
-
-            # Wait for page to fully stabilize
-            page.wait_for_timeout(2000)
-
-            self._status("🔄", f"Вибір вкладки «{label}»...")
-            page.evaluate(f"""() => {{
-                const tab = document.querySelector('{tab_selector.split(",")[0].strip()}');
-                if (tab) tab.click();
-            }}""")
-            page.wait_for_timeout(1000)
-
-            self._status("✏️", f"Заповнення форми: {query}...")
-            page.evaluate(f"""([q, d]) => {{
-                const inp = document.querySelector('{input_selector}');
-                const dateInp = document.querySelector('{date_selector}');
-                if (inp) {{
-                    inp.value = q;
-                    inp.dispatchEvent(new Event('input', {{bubbles: true}}));
-                    inp.dispatchEvent(new Event('change', {{bubbles: true}}));
-                }}
-                if (dateInp) {{
-                    dateInp.value = d;
-                    dateInp.dispatchEvent(new Event('input', {{bubbles: true}}));
-                    dateInp.dispatchEvent(new Event('change', {{bubbles: true}}));
-                }}
-            }}""", [query, date])
 
             html, result_url = self._submit_and_wait(page, query)
 
