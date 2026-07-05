@@ -196,7 +196,7 @@ def run_check(chat_id: str, query: str, qtype: str):
         policy_number, start_date, end_date, result = find_policy_end(
             query=query,
             search_type=qtype,
-            headless=True,
+            headless=False,
             status_cb=status_cb,
         )
         log.info(f"find_policy_end DONE: policy={policy_number}")
