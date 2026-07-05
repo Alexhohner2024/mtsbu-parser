@@ -30,6 +30,12 @@ def _launch_browser(headless: bool = True, proxy_url: str = None):
         "--disable-blink-features=AutomationControlled",
         "--no-first-run",
         "--no-default-browser-check",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-infobars",
+        "--window-size=1920,1080",
+        "--start-maximized",
+        "--disable-features=VizDisplayCompositor",
     ]
 
     launch_kwargs = dict(
@@ -129,8 +135,8 @@ class MtsbuChecker:
         """Wait for Cloudflare Turnstile to auto-solve, then try click if needed."""
         self._status("🛡️", "Очікування Cloudflare Turnstile...")
 
-        # Phase 1: Wait for auto-solve (Turnstile may solve itself with Patchright)
-        for i in range(30):
+        # Phase 1: Wait for auto-solve with longer timeout (Turnstile may need more time on servers)
+        for i in range(45):
             solved = page.evaluate("""() => {
                 const f = document.querySelector('[name="g-recaptcha-response"]');
                 if (f && f.value && f.value.length > 0) return true;
@@ -151,7 +157,7 @@ class MtsbuChecker:
 
         if clicked:
             # Wait for Turnstile to process after click
-            for i in range(15):
+            for i in range(20):
                 solved = page.evaluate("""() => {
                     const f = document.querySelector('[name="g-recaptcha-response"]');
                     if (f && f.value && f.value.length > 0) return true;
@@ -250,7 +256,12 @@ class MtsbuChecker:
 
     def _check(self, query: str, date: str, tab_selector: str, input_selector: str, date_selector: str, label: str) -> dict:
         browser = self._get_browser()
-        page = browser.new_page()
+        context = browser.new_context(
+            viewport={"width": 1920, "height": 1080},
+            locale="uk-UA",
+            timezone_id="Europe/Kyiv",
+        )
+        page = context.new_page()
         try:
             turnstile_solved = False
             max_attempts = 3
@@ -320,7 +331,7 @@ class MtsbuChecker:
             return result
 
         finally:
-            page.close()
+            context.close()
 
     def check_by_plate(self, plate: str, date: str) -> dict:
         return self._check(
