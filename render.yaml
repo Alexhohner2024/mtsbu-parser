@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: mtsbu-parser
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: ALLOWED_CHAT_ID
+        sync: false
