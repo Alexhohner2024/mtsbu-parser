@@ -210,6 +210,19 @@ def run_check(chat_id: str, query: str, qtype: str):
         editor.force_update(error_text)
 
 
+# Ukrainian plate letters that differ between Cyrillic and Latin
+_CYR_TO_LAT = str.maketrans({
+    'А': 'A', 'В': 'B', 'С': 'C', 'Е': 'E', 'І': 'I',
+    'К': 'K', 'М': 'M', 'Н': 'H', 'О': 'O', 'Р': 'P',
+    'Т': 'T', 'У': 'Y', 'Х': 'X',
+})
+
+
+def transliterate_plate(text: str) -> str:
+    """Convert Ukrainian Cyrillic plate chars to Latin equivalents."""
+    return text.upper().translate(_CYR_TO_LAT)
+
+
 def detect_type(query: str) -> str:
     if len(query) == 17 and query.isalnum():
         return "vin"
@@ -248,7 +261,7 @@ def webhook():
         send_telegram(chat_id, "⛔ Доступ заборонено.")
         return jsonify({"ok": True}), 200
 
-    query = text.upper().strip()
+    query = transliterate_plate(text.strip())
     qtype = detect_type(query)
 
     Thread(target=run_check, args=(chat_id, query, qtype), daemon=True).start()
